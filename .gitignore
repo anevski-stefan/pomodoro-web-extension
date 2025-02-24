@@ -1,0 +1,7 @@
+# Ignore actual config file with sensitive data
+supabase-config.js
+
+# Other common files to ignore
+.DS_Store
+node_modules/
+*.log 
