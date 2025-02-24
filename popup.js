@@ -1,35 +1,59 @@
 class PomodoroTimer {
     constructor() {
-        this.workTime = 25;
-        this.breakTime = this.calculateBreakTime(this.workTime);
-        this.isRunning = false;
-        this.isBreak = false;
-        this.timeLeft = this.workTime * 60;
-        this.currentCategory = null;
+        // Add this line before the DOMContentLoaded listener
+        this.port = chrome.runtime.connect({ name: 'popup' });
         
-        this.timerList = document.getElementById('timer-list');
-        this.timerNameInput = document.getElementById('timer-name');
-        this.presetWorkTimeInput = document.getElementById('preset-work-time');
-        this.saveTimerButton = document.getElementById('save-timer');
-        
-        // Add modal elements
-        this.categoryModal = document.getElementById('category-modal');
-        this.categoryModalBtn = document.getElementById('category-modal-btn');
-        this.closeModalBtn = document.querySelector('.close-modal');
-        this.categoryNameInput = document.getElementById('category-name');
-        this.categoryColorInput = document.getElementById('category-color');
-        this.addCategoryButton = document.getElementById('add-category');
-        
-        this.timerModal = document.getElementById('timer-modal');
-        this.timerModalBtn = document.getElementById('timer-modal-btn');
-        this.timerCategorySelect = document.getElementById('timer-category');
-        
-        // Make sure modal is hidden initially
-        this.categoryModal.style.display = 'none';
-        this.timerModal.style.display = 'none';
-        
-        this.categoryFilter = document.getElementById('category-filter');
-        
+        // Listen for timer updates from background
+        this.port.onMessage.addListener((message) => {
+            if (message.action === 'TIMER_UPDATE') {
+                this.timeLeft = message.timeLeft;
+                this.isBreak = message.isBreak;
+                this.updateDisplay();
+            } else if (message.action === 'TIMER_COMPLETED') {
+                this.timeLeft = message.timeLeft;
+                this.isBreak = message.isBreak;
+                this.isRunning = false;
+                this.startButton.disabled = false;
+                this.pauseButton.disabled = true;
+                this.updateDisplay();
+            }
+        });
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            this.initializeTimer();
+        });
+    }
+
+    async initializeTimer() {
+        // Get initial state from background
+        chrome.runtime.sendMessage({ action: 'GET_TIMER_STATE' }, (response) => {
+            if (response) {
+                this.timeLeft = response.timeLeft;
+                this.isBreak = response.isBreak;
+                this.isRunning = response.isRunning;
+                this.workTime = response.workTime;
+                this.breakTime = response.breakTime || 5; // Add default value
+                
+                // Update break time display
+                if (this.breakTimeDisplay) {
+                    this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+                }
+                
+                // Update UI based on running state
+                if (this.isRunning) {
+                    this.startButton.disabled = true;
+                    this.pauseButton.disabled = false;
+                } else {
+                    this.startButton.disabled = false;
+                    this.pauseButton.disabled = true;
+                }
+                
+                this.updateDisplay();
+            }
+        });
+
+        // Initialize rest of the timer
         this.initializeElements();
         this.loadTimers();
         this.loadCategories();
@@ -42,12 +66,42 @@ class PomodoroTimer {
     }
 
     async initializeElements() {
+        // Get all required DOM elements
         this.timeDisplay = document.getElementById('time');
         this.statusDisplay = document.getElementById('status');
         this.startButton = document.getElementById('start');
         this.pauseButton = document.getElementById('pause');
         this.resetButton = document.getElementById('reset');
         this.breakTimeDisplay = document.getElementById('break-time-display');
+        this.timerList = document.getElementById('timer-list');
+        this.timerNameInput = document.getElementById('timer-name');
+        this.presetWorkTimeInput = document.getElementById('preset-work-time');
+        this.saveTimerButton = document.getElementById('save-timer');
+        this.categoryModal = document.getElementById('category-modal');
+        this.categoryModalBtn = document.getElementById('category-modal-btn');
+        this.closeModalBtn = document.querySelector('.close-modal');
+        this.categoryNameInput = document.getElementById('category-name');
+        this.categoryColorInput = document.getElementById('category-color');
+        this.addCategoryButton = document.getElementById('add-category');
+        this.timerModal = document.getElementById('timer-modal');
+        this.timerModalBtn = document.getElementById('timer-modal-btn');
+        this.timerCategorySelect = document.getElementById('timer-category');
+        this.categoryFilter = document.getElementById('category-filter');
+
+        // Verify all required elements are found
+        if (!this.timeDisplay || !this.statusDisplay) {
+            console.error('Required DOM elements not found');
+            return;
+        }
+
+        // Initialize break time display if it exists
+        if (this.breakTimeDisplay) {
+            this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+        }
+
+        // Initialize modal display
+        if (this.categoryModal) this.categoryModal.style.display = 'none';
+        if (this.timerModal) this.timerModal.style.display = 'none';
 
         // Add event listeners for editable time
         this.timeDisplay.addEventListener('focus', () => {
@@ -67,7 +121,9 @@ class PomodoroTimer {
 
             this.workTime = minutes;
             this.breakTime = this.calculateBreakTime(this.workTime);
-            this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+            if (this.breakTimeDisplay) {
+                this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+            }
             
             if (!this.isRunning) {
                 this.timeLeft = this.workTime * 60;
@@ -147,24 +203,56 @@ class PomodoroTimer {
         this.loadTimers();
     }
 
+    async syncWithBackground() {
+        chrome.runtime.sendMessage({ action: 'GET_TIMER_STATE' }, (response) => {
+            this.timeLeft = response.timeLeft;
+            this.isBreak = response.isBreak;
+            this.isRunning = response.isRunning;
+            this.workTime = response.workTime;
+            this.breakTime = response.breakTime;
+            this.updateDisplay();
+        });
+    }
+
     start() {
         if (!this.isRunning) {
-            this.isRunning = true;
-            this.timer = setInterval(() => this.updateTimer(), 1000);
+            chrome.runtime.sendMessage({
+                action: 'START_TIMER',
+                timeLeft: this.timeLeft,
+                isBreak: this.isBreak,
+                workTime: this.workTime,
+                breakTime: this.breakTime
+            }, (response) => {
+                if (response && response.success) {
+                    this.isRunning = true;
+                    this.startButton.disabled = true;
+                    this.pauseButton.disabled = false;
+                }
+            });
         }
     }
 
     pause() {
-        this.isRunning = false;
-        clearInterval(this.timer);
+        chrome.runtime.sendMessage({ action: 'PAUSE_TIMER' }, (response) => {
+            if (response && response.success) {
+                this.isRunning = false;
+                this.startButton.disabled = false;
+                this.pauseButton.disabled = true;
+            }
+        });
     }
 
     reset() {
-        this.isRunning = false;
-        clearInterval(this.timer);
-        this.timeLeft = this.workTime * 60;
-        this.isBreak = false;
-        this.updateDisplay();
+        chrome.runtime.sendMessage({ action: 'RESET_TIMER' }, (response) => {
+            if (response && response.success) {
+                this.isRunning = false;
+                this.timeLeft = this.workTime * 60;
+                this.isBreak = false;
+                this.updateDisplay();
+                this.startButton.disabled = false;
+                this.pauseButton.disabled = true;
+            }
+        });
     }
 
     updateTimer() {
@@ -225,7 +313,7 @@ class PomodoroTimer {
             type: 'basic',
             title: 'Pomodoro Timer',
             message: this.isBreak ? 'Time for a break!' : 'Break is over, back to work!',
-            iconUrl: 'icon.png'
+            silent: false
         });
     }
 
@@ -380,6 +468,17 @@ class PomodoroTimer {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    new PomodoroTimer();
+// Add listener for timer updates from background
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'UPDATE_TIME') {
+        const timer = document.querySelector('.pomodoro-timer');
+        if (timer) {
+            timer.timeLeft = request.timeLeft;
+            timer.isBreak = request.isBreak;
+            timer.updateDisplay();
+        }
+    }
 });
+
+// Create instance when document is loaded
+const timer = new PomodoroTimer();

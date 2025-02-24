@@ -3,7 +3,12 @@
   "name": "Pomodoro Timer with Categories",
   "version": "1.0",
   "description": "A Pomodoro timer with category management and Supabase integration",
-  "permissions": ["storage", "alarms", "notifications"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "background"
+  ],
   "action": {
     "default_popup": "popup.html"
   },
