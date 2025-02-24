@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pomodoro Timer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="management-buttons">
+            <button id="timer-modal-btn" class="icon-button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+            </button>
+            <button id="category-modal-btn" class="icon-button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v20M2 12h20"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="timer-display">
+            <div class="circle-timer">
+                <svg class="progress-ring" width="200" height="200">
+                    <circle class="progress-ring__circle-bg" cx="100" cy="100" r="90" />
+                    <circle class="progress-ring__circle" cx="100" cy="100" r="90" />
+                </svg>
+                <div class="timer-text">
+                    <div class="editable-time" id="time" contenteditable="true">25:00</div>
+                    <div id="status">Work Time</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Modal -->
+        <div id="category-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add Category</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="category-form">
+                        <div class="input-group">
+                            <label for="category-name">Category Name</label>
+                            <input type="text" id="category-name" placeholder="Enter category name">
+                        </div>
+                        <div class="input-group">
+                            <label for="category-color">Category Color</label>
+                            <input type="color" id="category-color" value="#ffffff">
+                        </div>
+                        <button id="add-category">Add Category</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timer Modal -->
+        <div id="timer-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add Timer</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="timer-form">
+                        <div class="input-group">
+                            <label for="timer-name">Timer Name</label>
+                            <input type="text" id="timer-name" placeholder="Enter timer name">
+                        </div>
+                        <div class="input-group">
+                            <label for="preset-work-time">Work Time (minutes)</label>
+                            <input type="number" id="preset-work-time" min="25" value="25">
+                        </div>
+                        <div class="input-group">
+                            <label for="timer-category">Category</label>
+                            <select id="timer-category">
+                                <option value="">Select a category</option>
+                            </select>
+                        </div>
+                        <button id="save-timer">Save Timer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="start">Start</button>
+            <button id="pause">Pause</button>
+            <button id="reset">Reset</button>
+        </div>
+
+        <div class="saved-timers-section">
+            <div class="saved-timers-header">
+                <h3>Saved Timers</h3>
+                <div class="filter-group">
+                    <select id="category-filter">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+            </div>
+            <div class="timer-presets">
+                <div id="timer-list"></div>
+            </div>
+        </div>
+    </div>
+    <script src="supabase.min.js"></script>
+    <script src="supabase-init.js"></script>
+    <script src="supabase-config.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
