@@ -1,8 +1,8 @@
 let timer = null;
-let timeLeft = 25 * 60; // Changed back to 25 minutes
+let timeLeft = 1 * 60; // Changed to 1 minute for testing
 let isBreak = false;
-let workTime = 25;  // Changed back to 25 minutes
-let breakTime = 5;  // Changed back to 5 minutes
+let workTime = 1;  // Changed to 1 minute for testing
+let breakTime = 1;  // Changed to 1 minute for testing
 let isRunning = false;
 let ports = [];
 
@@ -13,11 +13,12 @@ chrome.runtime.onInstalled.addListener(() => {
     
     // Set default values
     chrome.storage.local.set({
-        timeLeft: 25 * 60,  // Changed back to 25 minutes
+        timeLeft: 1 * 60,  // Changed to 1 minute for testing
         isBreak: false,
-        workTime: 25,      // Changed back to 25 minutes
-        breakTime: 5,      // Changed back to 5 minutes
-        isRunning: false
+        workTime: 1,      // Changed to 1 minute for testing
+        breakTime: 1,      // Changed to 1 minute for testing
+        isRunning: false,
+        showNotification: false
     });
 });
 
@@ -30,10 +31,10 @@ function initializeState() {
         }
         
         // Set default values if not in storage
-        timeLeft = result.timeLeft || workTime * 60;
+        timeLeft = result.timeLeft || 1 * 60; // Changed to 1 minute
         isBreak = result.isBreak || false;
-        workTime = result.workTime || 25;
-        breakTime = result.breakTime || 5;
+        workTime = result.workTime || 1; // Changed to 1 minute
+        breakTime = result.breakTime || 1; // Changed to 1 minute
         isRunning = false;
         
         // Save this clean state
@@ -121,7 +122,7 @@ function startTimer() {
                 timer = null;
                 isBreak = !isBreak;  // Switch between work and break
                 timeLeft = isBreak ? breakTime * 60 : workTime * 60;
-                isRunning = false;
+                isRunning = false; // Changed: Don't keep running when switching to break mode
                 saveState();
                 
                 // Show notification
@@ -133,7 +134,7 @@ function startTimer() {
                         action: 'TIMER_COMPLETED',
                         timeLeft: timeLeft,
                         isBreak: isBreak,  // Send the new break state
-                        isRunning: false
+                        isRunning: isRunning  // Send the running state (which is now false)
                     });
                 });
             }
@@ -146,6 +147,7 @@ function pauseTimer() {
         clearInterval(timer);
         timer = null;
     }
+    saveState();
 }
 
 function resetTimer() {
@@ -172,14 +174,48 @@ function switchMode() {
     showNotification();
 }
 
-function showNotification() {
-    chrome.notifications.create('', {
-        type: 'basic',
-        iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',  // Tiny transparent PNG
-        title: 'Pomodoro Timer',
-        message: isBreak ? 'Time for a break!' : 'Break is over, back to work!',
-        silent: false
+// Add this function as an alternative notification method
+function showBadgeNotification() {
+    // Update the extension badge
+    chrome.action.setBadgeText({ text: isBreak ? 'BREAK' : 'WORK' });
+    chrome.action.setBadgeBackgroundColor({ 
+        color: isBreak ? '#059669' : '#2563eb' 
     });
+    
+    // Try to play a sound (this might not work in all browsers)
+    const audio = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' + Array(20).join('A'));
+    audio.play().catch(e => console.log('Could not play notification sound', e));
+}
+
+// Modify the timer completion code to use both notification methods
+function showNotification() {
+    // Update the extension badge
+    chrome.action.setBadgeText({ text: isBreak ? 'BREAK' : 'WORK' });
+    chrome.action.setBadgeBackgroundColor({ 
+        color: isBreak ? '#059669' : '#2563eb' 
+    });
+    
+    // Set a flag in storage to show notification in popup
+    chrome.storage.local.set({
+        showNotification: true,
+        notificationMessage: isBreak ? 'Time for a break!' : 'Break is over, back to work!',
+        notificationTimestamp: Date.now()
+    });
+    
+    // Try to open the popup if it's not already open
+    chrome.action.openPopup();
+    
+    // Try Chrome's notification API as well
+    try {
+        chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            title: 'Pomodoro Timer',
+            message: isBreak ? 'Time for a break!' : 'Break is over, back to work!'
+        });
+    } catch (error) {
+        console.error('Error showing notification:', error);
+    }
 }
 
 function broadcastUpdate() {

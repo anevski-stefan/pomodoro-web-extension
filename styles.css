@@ -628,3 +628,18 @@ body {
 #save-timer:hover {
     background-color: var(--primary-hover);
 }
+
+.timer-name[contenteditable="true"] {
+    outline: none;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.timer-name[contenteditable="true"]:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.timer-name[contenteditable="true"]:focus {
+    background-color: rgba(0, 0, 0, 0.1);
+}

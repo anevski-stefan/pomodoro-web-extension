@@ -12,9 +12,9 @@ class PomodoroTimer {
             } else if (message.action === 'TIMER_COMPLETED') {
                 this.timeLeft = message.timeLeft;
                 this.isBreak = message.isBreak;
-                this.isRunning = false;
-                this.startButton.disabled = false;
-                this.pauseButton.disabled = true;
+                this.isRunning = message.isRunning || false;
+                this.startButton.disabled = this.isRunning;
+                this.pauseButton.disabled = !this.isRunning;
                 this.updateDisplay();
             }
         });
@@ -23,6 +23,9 @@ class PomodoroTimer {
         document.addEventListener('DOMContentLoaded', () => {
             this.initializeTimer();
         });
+
+        // Add this property to track undefined timer count
+        this.undefinedTimerCount = 0;
     }
 
     async initializeTimer() {
@@ -50,6 +53,19 @@ class PomodoroTimer {
                 }
                 
                 this.updateDisplay();
+            }
+        });
+
+        // Check for notification
+        chrome.storage.local.get(['showNotification', 'notificationMessage', 'notificationTimestamp'], (result) => {
+            if (result.showNotification && result.notificationTimestamp) {
+                // Only show notifications that are less than 10 seconds old
+                const now = Date.now();
+                if (now - result.notificationTimestamp < 10000) {
+                    this.showCustomNotification(result.notificationMessage);
+                }
+                // Clear the notification flag
+                chrome.storage.local.set({ showNotification: false });
             }
         });
 
@@ -113,7 +129,7 @@ class PomodoroTimer {
             const timeStr = this.timeDisplay.textContent.trim();
             const minutes = parseInt(timeStr);
             
-            if (isNaN(minutes) || minutes < 25) {
+            if (isNaN(minutes) || minutes < 1) {
                 // Restore original value if input is invalid
                 this.timeDisplay.textContent = this.timeDisplay.dataset.original;
                 return;
@@ -198,9 +214,26 @@ class PomodoroTimer {
             return;
         }
 
+        // Clear inputs
         this.categoryNameInput.value = '';
         this.categoryColorInput.value = '#ffffff';
-        this.loadTimers();
+        
+        // Close the modal
+        this.categoryModal.style.display = 'none';
+        
+        // Refresh all relevant components
+        await Promise.all([
+            this.loadCategories(),  // Refresh category dropdowns
+            this.loadTimers()       // Refresh timer list with categories
+        ]);
+        
+        // Update category filters
+        if (this.timerCategorySelect) {
+            this.timerCategorySelect.value = '';
+        }
+        if (this.categoryFilter) {
+            this.categoryFilter.value = '';
+        }
     }
 
     async syncWithBackground() {
@@ -311,19 +344,26 @@ class PomodoroTimer {
     showNotification() {
         chrome.notifications.create({
             type: 'basic',
-            title: 'Pomodoro Timer',
-            message: this.isBreak ? 'Time for a break!' : 'Break is over, back to work!',
+            iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            title: 'Pomodoro Timer ⏰',
+            message: this.isBreak ? '🌿 Time for a break!' : '💼 Break is over, back to work!',
             silent: false
         });
     }
 
     async saveTimer() {
-        const name = this.timerNameInput.value.trim();
+        let name = this.timerNameInput.value.trim();
         const workTime = parseInt(this.presetWorkTimeInput.value);
         const categoryId = this.timerCategorySelect.value;
         
-        if (!name || !workTime) {
-            alert('Please enter a timer name and work time');
+        // If no name provided, generate "Undefined X" where X is incremental
+        if (!name) {
+            this.undefinedTimerCount++;
+            name = `Undefined ${this.undefinedTimerCount}`;
+        }
+
+        if (!workTime) {
+            alert('Please enter work time');
             return;
         }
 
@@ -340,17 +380,30 @@ class PomodoroTimer {
             return;
         }
 
+        // Clear form
         this.timerNameInput.value = '';
         this.presetWorkTimeInput.value = '25';
         this.timerCategorySelect.value = '';
+        
+        // Close modal
         this.timerModal.style.display = 'none';
-        this.loadTimers();
+        
+        // Refresh timer list
+        await this.loadTimers();
     }
 
     async loadTimers() {
+        // Add this at the beginning of loadTimers to get the current count
+        const { data: timers } = await supabase
+            .from('timers')
+            .select('name')
+            .ilike('name', 'Undefined%');
+        
+        this.undefinedTimerCount = timers ? timers.length : 0;
+        
         this.timerList.innerHTML = '';
         
-        const { data: timers, error } = await supabase
+        const { data: timersData, error } = await supabase
             .from('timers')
             .select(`
                 *,
@@ -368,8 +421,8 @@ class PomodoroTimer {
         // Filter timers by selected category
         const selectedCategory = this.categoryFilter.value;
         const filteredTimers = selectedCategory 
-            ? timers.filter(timer => timer.category_id === selectedCategory)
-            : timers;
+            ? timersData.filter(timer => timer.category_id === selectedCategory)
+            : timersData;
 
         // Group filtered timers by category
         const timersByCategory = filteredTimers.reduce((acc, timer) => {
@@ -395,7 +448,7 @@ class PomodoroTimer {
                 timerElement.className = 'timer-preset-item';
                 timerElement.innerHTML = `
                     <div class="timer-info">
-                        <span class="timer-name">${timer.name}</span>
+                        <span class="timer-name" contenteditable="true">${timer.name}</span>
                         <span class="timer-duration">${timer.work_time} min</span>
                     </div>
                     <button class="delete-timer">
@@ -404,6 +457,34 @@ class PomodoroTimer {
                         </svg>
                     </button>
                 `;
+                
+                // Add event listener for name editing
+                const nameElement = timerElement.querySelector('.timer-name');
+                nameElement.addEventListener('blur', async () => {
+                    const newName = nameElement.textContent.trim();
+                    if (newName !== timer.name) {
+                        const { error } = await supabase
+                            .from('timers')
+                            .update({ name: newName })
+                            .eq('id', timer.id);
+
+                        if (error) {
+                            console.error('Error updating timer name:', error);
+                            nameElement.textContent = timer.name; // Revert on error
+                            return;
+                        }
+                        
+                        timer.name = newName;
+                    }
+                });
+
+                // Prevent Enter key from creating new lines
+                nameElement.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        nameElement.blur();
+                    }
+                });
                 
                 timerElement.addEventListener('click', () => {
                     this.workTime = timer.work_time;
@@ -465,6 +546,23 @@ class PomodoroTimer {
                 select.appendChild(option);
             });
         });
+    }
+
+    showCustomNotification(message) {
+        const notification = document.getElementById('custom-notification');
+        const messageElement = document.getElementById('notification-message');
+        
+        if (notification && messageElement) {
+            messageElement.textContent = message;
+            notification.style.display = 'block';
+            notification.classList.add('shake');
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+                notification.classList.remove('shake');
+            }, 5000);
+        }
     }
 }
 
