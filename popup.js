@@ -3,18 +3,27 @@ class PomodoroTimer {
         // Add this line before the DOMContentLoaded listener
         this.port = chrome.runtime.connect({ name: 'popup' });
         
+        // Add this property to track if break time was manually set
+        this.breakTimeManuallySet = false;
+        
+        // Add this property to track the current category
+        this.currentCategory = null;
+        
+        // Add these properties to track the current timer
+        this.currentTimerId = null;
+        this.currentTimerName = null;
+        
         // Listen for timer updates from background
         this.port.onMessage.addListener((message) => {
             if (message.action === 'TIMER_UPDATE') {
                 this.timeLeft = message.timeLeft;
                 this.isBreak = message.isBreak;
+                this.isRunning = true;
                 this.updateDisplay();
             } else if (message.action === 'TIMER_COMPLETED') {
                 this.timeLeft = message.timeLeft;
                 this.isBreak = message.isBreak;
                 this.isRunning = message.isRunning || false;
-                this.startButton.disabled = this.isRunning;
-                this.pauseButton.disabled = !this.isRunning;
                 this.updateDisplay();
             }
         });
@@ -36,20 +45,17 @@ class PomodoroTimer {
                 this.isBreak = response.isBreak;
                 this.isRunning = response.isRunning;
                 this.workTime = response.workTime;
-                this.breakTime = response.breakTime || 5; // Changed back to 5 minutes
+                this.breakTime = response.breakTime || 5; // Add default value
                 
                 // Update break time display
                 if (this.breakTimeDisplay) {
                     this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
                 }
                 
-                // Update UI based on running state
-                if (this.isRunning) {
-                    this.startButton.disabled = true;
-                    this.pauseButton.disabled = false;
-                } else {
-                    this.startButton.disabled = false;
-                    this.pauseButton.disabled = true;
+                // Update button states based on running state
+                if (this.startButton && this.pauseButton) {
+                    this.startButton.disabled = this.isRunning;
+                    this.pauseButton.disabled = !this.isRunning;
                 }
                 
                 this.updateDisplay();
@@ -77,8 +83,12 @@ class PomodoroTimer {
     }
 
     calculateBreakTime(workMinutes) {
-        // Break time is 20% of work time, rounded to nearest minute
-        return Math.round(workMinutes * 0.2);
+        // Only auto-calculate if the break time hasn't been manually set
+        if (!this.breakTimeManuallySet) {
+            // Break time is 20% of work time, rounded to nearest minute
+            return Math.round(workMinutes * 0.2);
+        }
+        return this.breakTime;
     }
 
     async initializeElements() {
@@ -103,6 +113,7 @@ class PomodoroTimer {
         this.timerModalBtn = document.getElementById('timer-modal-btn');
         this.timerCategorySelect = document.getElementById('timer-category');
         this.categoryFilter = document.getElementById('category-filter');
+        this.switchModeButton = document.getElementById('switch-mode');
 
         // Verify all required elements are found
         if (!this.timeDisplay || !this.statusDisplay) {
@@ -113,6 +124,49 @@ class PomodoroTimer {
         // Initialize break time display if it exists
         if (this.breakTimeDisplay) {
             this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+            
+            // Add event listeners for editable break time
+            this.breakTimeDisplay.addEventListener('focus', () => {
+                // Store original value in case of invalid input
+                this.breakTimeDisplay.dataset.original = this.breakTimeDisplay.textContent;
+            });
+            
+            this.breakTimeDisplay.addEventListener('blur', () => {
+                const breakTimeStr = this.breakTimeDisplay.textContent.trim();
+                // Extract the number from "Break time: X min"
+                const match = breakTimeStr.match(/Break time: (\d+) min/);
+                
+                if (!match) {
+                    // If the format is invalid, restore the original
+                    this.breakTimeDisplay.textContent = this.breakTimeDisplay.dataset.original;
+                    return;
+                }
+                
+                const minutes = parseInt(match[1]);
+                
+                if (isNaN(minutes) || minutes < 1) {
+                    // Restore original value if input is invalid
+                    this.breakTimeDisplay.textContent = this.breakTimeDisplay.dataset.original;
+                    return;
+                }
+                
+                this.breakTime = minutes;
+                this.breakTimeManuallySet = true;
+                this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+                
+                // If we're in break mode and not running, update the timer
+                if (this.isBreak && !this.isRunning) {
+                    this.timeLeft = this.breakTime * 60;
+                    this.updateDisplay();
+                }
+            });
+            
+            this.breakTimeDisplay.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.breakTimeDisplay.blur();
+                }
+            });
         }
 
         // Initialize modal display
@@ -136,9 +190,13 @@ class PomodoroTimer {
             }
 
             this.workTime = minutes;
-            this.breakTime = this.calculateBreakTime(this.workTime);
-            if (this.breakTimeDisplay) {
-                this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+            
+            // Only auto-calculate break time if it hasn't been manually set
+            if (!this.breakTimeManuallySet) {
+                this.breakTime = this.calculateBreakTime(this.workTime);
+                if (this.breakTimeDisplay) {
+                    this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+                }
             }
             
             if (!this.isRunning) {
@@ -153,6 +211,9 @@ class PomodoroTimer {
                 this.timeDisplay.blur();
             }
         });
+
+        // Update initial button text based on state
+        this.updateStartButtonText();
     }
 
     addEventListeners() {
@@ -191,6 +252,7 @@ class PomodoroTimer {
         });
 
         this.categoryFilter.addEventListener('change', () => this.loadTimers());
+        this.switchModeButton.addEventListener('click', () => this.handleModeSwitch());
     }
 
     async addNewCategory() {
@@ -258,8 +320,7 @@ class PomodoroTimer {
             }, (response) => {
                 if (response && response.success) {
                     this.isRunning = true;
-                    this.startButton.disabled = true;
-                    this.pauseButton.disabled = false;
+                    this.updateDisplay();
                 }
             });
         }
@@ -269,8 +330,7 @@ class PomodoroTimer {
         chrome.runtime.sendMessage({ action: 'PAUSE_TIMER' }, (response) => {
             if (response && response.success) {
                 this.isRunning = false;
-                this.startButton.disabled = false;
-                this.pauseButton.disabled = true;
+                this.updateDisplay();
             }
         });
     }
@@ -279,11 +339,12 @@ class PomodoroTimer {
         chrome.runtime.sendMessage({ action: 'RESET_TIMER' }, (response) => {
             if (response && response.success) {
                 this.isRunning = false;
-                this.timeLeft = this.workTime * 60;
-                this.isBreak = false;
+                this.timeLeft = this.isBreak ? this.breakTime * 60 : this.workTime * 60;
                 this.updateDisplay();
                 this.startButton.disabled = false;
                 this.pauseButton.disabled = true;
+                // Update button text back to Start
+                this.updateStartButtonText();
             }
         });
     }
@@ -298,30 +359,40 @@ class PomodoroTimer {
     }
 
     async switchMode() {
-        this.isBreak = !this.isBreak;
-        this.timeLeft = (this.isBreak ? this.breakTime : this.workTime) * 60;
-        
+        // Save the session if we're currently in work mode (about to switch to break)
         if (!this.isBreak) {
             await this.saveSession();
         }
+        
+        // Switch modes
+        this.isBreak = !this.isBreak;
+        this.timeLeft = (this.isBreak ? this.breakTime : this.workTime) * 60;
 
         this.updateDisplay();
         this.showNotification();
     }
 
     async saveSession() {
-        if (!this.currentCategory) return;
-
+        // Create session data with more details
+        const sessionData = {
+            category_id: this.currentCategory || null,
+            timer_id: this.currentTimerId || null,
+            timer_name: this.currentTimerName || 'Manual Timer',
+            duration: this.workTime,
+            break_duration: this.breakTime,
+            completed_at: new Date()
+        };
+        
+        console.log('Saving session:', sessionData);
+        
         const { error } = await supabase
             .from('sessions')
-            .insert([{
-                category_id: this.currentCategory,
-                duration: this.workTime,
-                completed_at: new Date()
-            }]);
+            .insert([sessionData]);
 
         if (error) {
             console.error('Error saving session:', error);
+        } else {
+            console.log('Session saved successfully');
         }
     }
 
@@ -331,14 +402,28 @@ class PomodoroTimer {
         this.timeDisplay.textContent = 
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         this.statusDisplay.textContent = this.isBreak ? 'Break Time' : 'Work Time';
+        
+        // Correctly set button states
+        if (this.startButton && this.pauseButton) {
+            // Start button should be disabled when running
+            this.startButton.disabled = this.isRunning;
+            
+            // Pause button should be disabled when not running
+            this.pauseButton.disabled = !this.isRunning;
+        }
+        
+        // Update the start button text
+        this.updateStartButtonText();
 
         // Update progress ring
         const circle = document.querySelector('.progress-ring__circle');
-        const totalTime = (this.isBreak ? this.breakTime : this.workTime) * 60;
-        const progress = (this.timeLeft / totalTime);
-        const circumference = 2 * Math.PI * 90;
-        const offset = circumference * (1 - progress);
-        circle.style.strokeDashoffset = offset;
+        if (circle) {
+            const totalTime = (this.isBreak ? this.breakTime : this.workTime) * 60;
+            const progress = (this.timeLeft / totalTime);
+            const circumference = 2 * Math.PI * 90;
+            const offset = circumference * (1 - progress);
+            circle.style.strokeDashoffset = offset;
+        }
     }
 
     showNotification() {
@@ -367,11 +452,15 @@ class PomodoroTimer {
             return;
         }
 
+        // Calculate break time based on work time if not manually set
+        const breakTime = this.breakTimeManuallySet ? this.breakTime : this.calculateBreakTime(workTime);
+
         const { error } = await supabase
             .from('timers')
             .insert([{ 
                 name,
                 work_time: workTime,
+                break_time: breakTime, // Add break time to the database
                 category_id: categoryId || null
             }]);
 
@@ -446,10 +535,15 @@ class PomodoroTimer {
             categoryTimers.forEach(timer => {
                 const timerElement = document.createElement('div');
                 timerElement.className = 'timer-preset-item';
+                
+                // Add break time to the display if available
+                const breakTimeDisplay = timer.break_time ? 
+                    `<span class="timer-break-duration">(Break: ${timer.break_time} min)</span>` : '';
+                    
                 timerElement.innerHTML = `
                     <div class="timer-info">
                         <span class="timer-name" contenteditable="true">${timer.name}</span>
-                        <span class="timer-duration">${timer.work_time} min</span>
+                        <span class="timer-duration">${timer.work_time} min ${breakTimeDisplay}</span>
                     </div>
                     <button class="delete-timer">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -488,8 +582,29 @@ class PomodoroTimer {
                 
                 timerElement.addEventListener('click', () => {
                     this.workTime = timer.work_time;
+                    // Set break time from the database if available
+                    if (timer.break_time) {
+                        this.breakTime = timer.break_time;
+                        this.breakTimeManuallySet = true;
+                        if (this.breakTimeDisplay) {
+                            this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+                        }
+                    } else {
+                        // Calculate break time if not available
+                        this.breakTime = this.calculateBreakTime(this.workTime);
+                        this.breakTimeManuallySet = false;
+                        if (this.breakTimeDisplay) {
+                            this.breakTimeDisplay.textContent = `Break time: ${this.breakTime} min`;
+                        }
+                    }
+                    
                     this.timeLeft = this.workTime * 60;
                     this.updateDisplay();
+                    
+                    // Set the current timer information for session tracking
+                    this.currentCategory = timer.category_id;
+                    this.currentTimerId = timer.id;
+                    this.currentTimerName = timer.name;
 
                     document.querySelectorAll('.timer-preset-item').forEach(el => 
                         el.classList.remove('active'));
@@ -563,6 +678,45 @@ class PomodoroTimer {
                 notification.classList.remove('shake');
             }, 5000);
         }
+    }
+
+    async handleModeSwitch() {
+        // If timer is running, ask for confirmation
+        if (this.isRunning) {
+            if (!confirm('Timer is running. Are you sure you want to switch modes?')) {
+                return;
+            }
+            // Pause the timer
+            await this.pause();
+        }
+
+        // If switching from work to break, save the session
+        if (!this.isBreak) {
+            await this.saveSession();
+        }
+
+        // Switch the mode
+        this.isBreak = !this.isBreak;
+        this.timeLeft = (this.isBreak ? this.breakTime : this.workTime) * 60;
+        
+        // Update the display
+        this.updateDisplay();
+        
+        // Enable the start button
+        this.startButton.disabled = false;
+        this.pauseButton.disabled = true;
+    }
+
+    // Add this new method to handle button text updates
+    updateStartButtonText() {
+        if (this.isRunning) {
+            this.startButton.textContent = 'Start';  // Keep it as 'Start' when running
+            return;
+        }
+        
+        // Only show 'Resume' when paused (not at full duration)
+        const fullDuration = (this.isBreak ? this.breakTime : this.workTime) * 60;
+        this.startButton.textContent = this.timeLeft < fullDuration ? 'Resume' : 'Start';
     }
 }
 

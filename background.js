@@ -154,8 +154,8 @@ function pauseTimer() {
 
 function resetTimer() {
     pauseTimer();
-    timeLeft = workTime * 60;
-    isBreak = false;
+    // Use the current mode to determine which time to reset to
+    timeLeft = isBreak ? breakTime * 60 : workTime * 60;
     isRunning = false;
     saveState(); // Save the reset state
     
@@ -164,7 +164,7 @@ function resetTimer() {
         port.postMessage({
             action: 'TIMER_RESET',
             timeLeft: timeLeft,
-            isBreak: isBreak,
+            isBreak: isBreak, // Keep the current break state
             isRunning: false
         });
     });

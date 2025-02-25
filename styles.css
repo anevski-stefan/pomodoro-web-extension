@@ -234,11 +234,12 @@ body {
 
 .button-group {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     margin-top: 24px;
 }
 
+/* Base button styles */
 .button-group button {
     background-color: var(--surface-color);
     color: var(--text-color);
@@ -249,38 +250,46 @@ body {
     border-radius: var(--border-radius);
     transition: all 0.2s ease;
     box-shadow: var(--shadow);
+    cursor: pointer;
 }
 
-.button-group button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-.button-group button:active {
-    transform: translateY(0);
-    box-shadow: var(--shadow);
-}
-
+/* Start button styles */
 #start {
     border-color: var(--primary-color);
     color: var(--primary-color);
 }
 
-#start:hover {
+#start:not(:disabled):hover {
     background-color: var(--primary-color);
     color: white;
 }
 
+/* Pause button styles */
 #pause {
     border-color: var(--secondary-color);
     color: var(--secondary-color);
 }
 
-#pause:hover {
+#pause:not(:disabled):hover {
     background-color: var(--secondary-color);
     color: white;
+}
+
+/* Disabled button styles */
+.button-group button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: var(--surface-color);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Remove hover effects for disabled buttons */
+.button-group button:disabled:hover {
+    transform: none;
+    box-shadow: var(--shadow);
+    background-color: var(--surface-color);
 }
 
 #reset {
@@ -413,7 +422,16 @@ body {
 }
 
 .timer-preset-item.active .timer-duration {
-    color: rgba(255, 255, 255, 0.8);
+    color: white;
+}
+
+.timer-preset-item.active .timer-break-duration {
+    color: white;
+}
+
+.timer-preset-item .timer-break-duration {
+    color: var(--text-secondary);
+    font-size: 14px;
 }
 
 .category-management {
@@ -642,4 +660,74 @@ body {
 
 .timer-name[contenteditable="true"]:focus {
     background-color: rgba(0, 0, 0, 0.1);
+}
+
+.editable-break-time {
+    color: var(--secondary-color);
+    font-size: 14px;
+    text-align: center;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+}
+
+.editable-break-time:focus {
+    border-bottom: 2px solid var(--secondary-color);
+}
+
+.editable-break-time:hover {
+    opacity: 0.8;
+}
+
+/* Update button group to show all buttons in a single row */
+#switch-mode {
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: var(--border-radius);
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow);
+}
+
+#switch-mode:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-color: var(--secondary-color);
+    color: var(--secondary-color);
+}
+
+#switch-mode:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow);
+}
+
+/* Add styles for disabled buttons */
+.button-group button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: var(--surface-color);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    transform: none;
+    box-shadow: none;
+}
+
+/* Specific styles for disabled start button */
+#start:disabled {
+    background-color: var(--surface-color);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Override hover effects for disabled buttons */
+.button-group button:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    background-color: var(--surface-color);
 }
