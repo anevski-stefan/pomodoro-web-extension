@@ -36,7 +36,7 @@ class PomodoroTimer {
                 this.isBreak = response.isBreak;
                 this.isRunning = response.isRunning;
                 this.workTime = response.workTime;
-                this.breakTime = response.breakTime || 5; // Add default value
+                this.breakTime = response.breakTime || 5; // Changed back to 5 minutes
                 
                 // Update break time display
                 if (this.breakTimeDisplay) {
@@ -129,7 +129,7 @@ class PomodoroTimer {
             const timeStr = this.timeDisplay.textContent.trim();
             const minutes = parseInt(timeStr);
             
-            if (isNaN(minutes) || minutes < 1) {
+            if (isNaN(minutes) || minutes < 25) {
                 // Restore original value if input is invalid
                 this.timeDisplay.textContent = this.timeDisplay.dataset.original;
                 return;

@@ -1,8 +1,8 @@
 let timer = null;
-let timeLeft = 1 * 60; // Changed to 1 minute for testing
+let timeLeft = 25 * 60; // Changed back to 25 minutes
 let isBreak = false;
-let workTime = 1;  // Changed to 1 minute for testing
-let breakTime = 1;  // Changed to 1 minute for testing
+let workTime = 25;  // Changed back to 25 minutes
+let breakTime = 5;  // Changed back to 5 minutes
 let isRunning = false;
 let ports = [];
 
@@ -13,10 +13,10 @@ chrome.runtime.onInstalled.addListener(() => {
     
     // Set default values
     chrome.storage.local.set({
-        timeLeft: 1 * 60,  // Changed to 1 minute for testing
+        timeLeft: 25 * 60,  // Changed back to 25 minutes
         isBreak: false,
-        workTime: 1,      // Changed to 1 minute for testing
-        breakTime: 1,      // Changed to 1 minute for testing
+        workTime: 25,      // Changed back to 25 minutes
+        breakTime: 5,      // Changed back to 5 minutes
         isRunning: false,
         showNotification: false
     });
@@ -31,10 +31,10 @@ function initializeState() {
         }
         
         // Set default values if not in storage
-        timeLeft = result.timeLeft || 1 * 60; // Changed to 1 minute
+        timeLeft = result.timeLeft || 25 * 60; // Changed back to 25 minutes
         isBreak = result.isBreak || false;
-        workTime = result.workTime || 1; // Changed to 1 minute
-        breakTime = result.breakTime || 1; // Changed to 1 minute
+        workTime = result.workTime || 25; // Changed back to 25 minutes
+        breakTime = result.breakTime || 5; // Changed back to 5 minutes
         isRunning = false;
         
         // Save this clean state
@@ -63,6 +63,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 workTime = request.workTime;
                 breakTime = request.breakTime;
                 isRunning = true;
+                saveState(); // Save state before starting timer
                 startTimer();
                 sendResponse({ success: true });
                 break;
@@ -79,7 +80,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({ 
                     timeLeft, 
                     isBreak, 
-                    isRunning: timer !== null,
+                    isRunning,
                     workTime,
                     breakTime
                 });
@@ -105,10 +106,11 @@ function saveState() {
 
 function startTimer() {
     if (!timer) {
+        saveState(); // Save state when starting
         timer = setInterval(() => {
             if (timeLeft > 0) {
                 timeLeft--;
-                saveState();
+                saveState(); // Save state on each tick
                 ports.forEach(port => {
                     port.postMessage({
                         action: 'TIMER_UPDATE',
@@ -122,8 +124,8 @@ function startTimer() {
                 timer = null;
                 isBreak = !isBreak;  // Switch between work and break
                 timeLeft = isBreak ? breakTime * 60 : workTime * 60;
-                isRunning = false; // Changed: Don't keep running when switching to break mode
-                saveState();
+                isRunning = false; // Don't keep running when switching to break mode
+                saveState(); // Save state after completion
                 
                 // Show notification
                 showNotification();
@@ -147,7 +149,7 @@ function pauseTimer() {
         clearInterval(timer);
         timer = null;
     }
-    saveState();
+    saveState(); // Make sure to save state when pausing
 }
 
 function resetTimer() {
