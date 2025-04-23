@@ -16,7 +16,7 @@ A feature-rich Pomodoro Timer Chrome extension that helps you manage your time e
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/pomodoro-web-extension.git
+git clone https://github.com/anevski-stefan/pomodoro-web-extension.git
 ```
 
 2. Create a Supabase configuration file:
@@ -58,4 +58,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+This project is licensed under the [MIT License](LICENSE) - see the [LICENSE](LICENSE) file for details. 
